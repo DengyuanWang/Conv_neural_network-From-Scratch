@@ -124,9 +124,11 @@ def relu(x):
 
 def relu_backward(dl_dy, x, y):
     # TO DO
+    #dl_dy(1 by n) x(n by 1)
     # if x>0: y = x
     # if x<=0 y = 0.01 * x
-    dy_dx = np.where(x > 0, 1, 0.01)
+    dy_dx = np.transpose(np.where(x > 0, 1, 0.01))
+    dl_dx = np.multiply(dl_dy,dy_dx)
     return dl_dx
 
 
@@ -246,6 +248,67 @@ def train_slp(mini_batch_x, mini_batch_y):
 
 def train_mlp(mini_batch_x, mini_batch_y):
     # TO DO
+    gama = 0.05 # learning rate
+    lambda_ = 0.9 # decay rate
+    
+    mu, sigma = 0, 1 # mean and standard deviation
+    w1 = np.random.normal(mu, sigma, [30,196])
+    w1 = w1/np.max(np.max(np.absolute(w1), axis=0), axis=0)
+    b1 = np.random.normal(mu, sigma, [30,1])
+    b1 = b1/np.max(np.max(np.absolute(b1), axis=0), axis=0)
+    w2 = np.random.normal(mu, sigma, [10,30])
+    w2 = w2/np.max(np.max(np.absolute(w2), axis=0), axis=0)
+    b2 = np.random.normal(mu, sigma, [10,1])
+    b2 = b2/np.max(np.max(np.absolute(b2), axis=0), axis=0)
+    
+    batch_id = 0
+    batch_size = mini_batch_x.shape[1]
+    L_log = []
+    for iter in range(0,20000):
+        if (iter+1)%1000==0:
+            gama *= lambda_
+            print(gama)
+        dL_dw1 = 0
+        dL_db1 = 0
+        dL_dw2 = 0
+        dL_db2 = 0
+        L = 0
+        for i in range(0,batch_size):
+            x = mini_batch_x[:,i,batch_id].reshape(-1,1)
+            y = mini_batch_y[:,i,batch_id].reshape(-1,1)
+            y0_tilde = fc(x, w1, b1)
+            y0_relu = relu(y0_tilde)
+            y1_tilde = fc(y0_relu, w2, b2)
+            y1_relu = relu(y1_tilde)
+            l, dl_dy = loss_cross_entropy_softmax(y1_relu,y)
+            #dl_dx = relu_backward(dl_dy, x, y)
+            #dl_dx, dl_dw, dl_db = fc_backward(dl_dy, x, w, b, y)
+            #layer2
+            dl_dy1_tilde = relu_backward(dl_dy, y1_tilde, y1_relu)
+            dl_dy0_relu, dl_dw2, dl_db2 = fc_backward(dl_dy1_tilde, y0_relu, w2, b2, y1_tilde)
+            #layer1
+            dl_dy0_tilde= relu_backward(dl_dy0_relu, y0_tilde, y0_relu)
+            dl_dx, dl_dw1, dl_db1 = fc_backward(dl_dy0_tilde, x, w1, b1, y0_tilde)
+           
+            dL_dw1 += dl_dw1
+            dL_db1 += dl_db1
+            dL_dw2 += dl_dw2
+            dL_db2 += dl_db2
+            L = L+l
+        batch_id = (batch_id+random.randint(0, mini_batch_x.shape[2]) )%mini_batch_x.shape[2]
+        w1 -= gama*np.transpose(dL_dw1)/batch_size
+        b1 -= gama*np.transpose(dL_db1)/batch_size
+        w2 -= gama*np.transpose(dL_dw2)/batch_size
+        b2 -= gama*np.transpose(dL_db2)/batch_size
+        L_log.append(L/batch_size)
+    print("Train Over for SLP")
+    '''
+    plt.figure(1)
+    plt.plot(np.array(L_log))
+    plt.draw()
+    plt.pause(5)
+    plt.clf
+    '''
     return w1, b1, w2, b2
 
 
@@ -255,8 +318,8 @@ def train_cnn(mini_batch_x, mini_batch_y):
 
 
 if __name__ == '__main__':
-    main.main_slp_linear()
-    main.main_slp()
+    #main.main_slp_linear()
+    #main.main_slp()
     main.main_mlp()
     main.main_cnn()
 
