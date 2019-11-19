@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import numpy.matlib
 import os
 import time
 import scipy.io as sio
@@ -131,14 +132,71 @@ def relu_backward(dl_dy, x, y):
     dl_dx = np.multiply(dl_dy,dy_dx)
     return dl_dx
 
+def im2col(x,w_conv,b_conv):
+    kh,kw,ic,oc = w_conv.shape
+    h,w,_ = x.shape
+    IM = np.zeros([h+kh-1,w+kw-1,ic])
+    for i in range(0,x.shape[2]):
+        IM[:,:,i]=np.pad(x[:,:,i], [(int(kh/2), int(kh/2)), (int(kw/2), int(kw/2))], mode='constant', constant_values=0)
+    kkic = int(kh*kw*ic)
+    stride = 1
+    imout_h,imout_w = int(h/stride),int(w/stride)
+    loc_num = [imout_h,imout_w]
+    im_rows = np.zeros([loc_num[0]*loc_num[1],kkic])
+    for i in range(0,loc_num[0]):
+        for j in range(0,loc_num[1]):
+            i_s = i*stride
+            j_s = j*stride
+            im_rows[i*loc_num[1]+j,:] = IM[i_s:i_s+kh,j_s:j_s+kw,:].reshape(1,-1)
+    w_cols = np.zeros([kkic,oc])
+    for i in range(0,oc):
+        w_cols[:,i] = w_conv[:,:,:,i].reshape(-1)
+    rst = np.dot(im_rows,w_cols)#rst is patch_num by output_channels
+    bias = np.matlib.repmat(np.transpose(b_conv),rst.shape[0],1)
+    rst = np.add(rst,bias)
+    return rst,im_rows,w_cols
 
 def conv(x, w_conv, b_conv):
     # TO DO
+    #Tested, Correct!
+    #x is 14 by 14 by 1
+    #w_conv is 3 by 3 by 1 by 3, aka: kernel_height by kernel_width by inchannels by out channels
+    #b_conv is 3 by 1, aka output channels by 1
+    #assume step is 1, kernel height and width is always odd number
+    #here we will use im2col
+    kh,kw,ic,oc = w_conv.shape
+    h,w,_ = x.shape
+    stride = 1
+    imout_h,imout_w = int(h/stride),int(w/stride)
+    
+    rst,im_rows,w_cols = im2col(x, w_conv, b_conv)
+    #col2img
+    y = np.zeros([imout_h,imout_w,oc])
+    for i in range(0,rst.shape[1]):
+        y[:,:,i] = rst[:,i].reshape(y.shape[0],y.shape[1])
     return y
 
 
 def conv_backward(dl_dy, x, w_conv, b_conv, y):
     # TO DO
+    #seems to be correct
+    # y is height by witdh by channels
+    #dl_dy is 1 by height by witdh by channels
+    #dl_db is 1 by channels
+    #dl_db_i = dl_dy[:,:,i] * ones[height, width]*dy_db
+    #dl_dw is [1,kh,kw,ic,oc]
+    dl_db = np.zeros([1,b_conv.shape[0]])
+    #dl_drst is [height*width,oc]
+    dl_drst = np.zeros([y.shape[0]*y.shape[1],y.shape[2]])
+    dl_dw = np.zeros(w_conv.shape)
+    _,im_rows,_ = im2col(x, w_conv, b_conv)
+    #dl_dw_cols = np.zeros(w_cols.shape)
+    for i in range(0,dl_dy.shape[-1]):
+        dl_db[0,i] = np.sum(dl_dy[0,:,:,i])
+        dl_drst[:,i] = dl_dy[0,:,:,i].reshape(-1)
+        #dl_drst is height*width by out channel; im_rows is height*width by kkic,
+       #dl_dw_cols[:,i] = np.dot(dl_drst[:,i],im_rows)
+        dl_dw[:,:,:,i] = np.dot(dl_drst[:,i],im_rows).reshape(dl_dw.shape[0],dl_dw.shape[1],dl_dw.shape[2])
     return dl_dw, dl_db
 
 def pool2x2(x):
@@ -318,10 +376,11 @@ def train_cnn(mini_batch_x, mini_batch_y):
 
 
 if __name__ == '__main__':
+
     #main.main_slp_linear()
     #main.main_slp()
-    main.main_mlp()
-    main.main_cnn()
+    #main.main_mlp()
+    #main.main_cnn()
 
 
 
