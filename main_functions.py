@@ -5,7 +5,7 @@ from cnn import get_mini_batch, fc, relu, conv, pool2x2, flattening
 from cnn import train_slp_linear, train_slp, train_mlp, train_cnn
 
 
-def main_slp_linear():
+def main_slp_linear(retrain_tag):
     mnist_train = sio.loadmat('./mnist_train.mat')
     mnist_test = sio.loadmat('./mnist_test.mat')
     im_train, label_train = mnist_train['im_train'], mnist_train['label_train']
@@ -13,8 +13,14 @@ def main_slp_linear():
     batch_size = 32
     im_train, im_test = im_train / 255.0, im_test / 255.0
     mini_batch_x, mini_batch_y = get_mini_batch(im_train, label_train, batch_size)
-    w, b = train_slp_linear(mini_batch_x, mini_batch_y)
-    sio.savemat('slp_linear.mat', mdict={'w': w, 'b': b})
+
+
+    if retrain_tag:
+        w, b = train_slp_linear(mini_batch_x, mini_batch_y)
+        sio.savemat('slp_linear.mat', mdict={'w': w, 'b': b})
+    else:
+        data = sio.loadmat('slp_linear.mat')
+        w,b = data['w'], data['b']
 
     acc = 0
     confusion = np.zeros((10, 10))
@@ -34,7 +40,7 @@ def main_slp_linear():
     label_classes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     visualize_confusion_matrix(confusion, accuracy, label_classes, 'Single-layer Linear Perceptron Confusion Matrix')
 
-def main_slp():
+def main_slp(retrain_tag):
     mnist_train = sio.loadmat('./mnist_train.mat')
     mnist_test = sio.loadmat('./mnist_test.mat')
     im_train, label_train = mnist_train['im_train'], mnist_train['label_train']
@@ -42,8 +48,12 @@ def main_slp():
     batch_size = 32
     im_train, im_test = im_train / 255.0, im_test / 255.0
     mini_batch_x, mini_batch_y = get_mini_batch(im_train, label_train, batch_size)
-    w, b = train_slp(mini_batch_x, mini_batch_y)
-    sio.savemat('slp.mat', mdict={'w': w, 'b': b})
+    if retrain_tag:
+        w, b = train_slp(mini_batch_x, mini_batch_y)
+        sio.savemat('slp.mat', mdict={'w': w, 'b': b})
+    else:
+        data = sio.loadmat('slp.mat')
+        w,b = data['w'], data['b']
 
     acc = 0
     confusion = np.zeros((10, 10))
@@ -63,7 +73,7 @@ def main_slp():
     label_classes = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
     visualize_confusion_matrix(confusion, accuracy, label_classes, 'Single-layer Perceptron Confusion Matrix')
 
-def main_mlp():
+def main_mlp(retrain_tag):
     mnist_train = sio.loadmat('./mnist_train.mat')
     mnist_test = sio.loadmat('./mnist_test.mat')
     im_train, label_train = mnist_train['im_train'], mnist_train['label_train']
@@ -71,8 +81,13 @@ def main_mlp():
     batch_size = 32
     im_train, im_test = im_train / 255.0, im_test / 255.0
     mini_batch_x, mini_batch_y = get_mini_batch(im_train, label_train, batch_size)
-    w1, b1, w2, b2 = train_mlp(mini_batch_x, mini_batch_y)
-    sio.savemat('mlp.mat', mdict={'w1': w1, 'b1': b1, 'w2': w2, 'b2': b2})
+    
+    if retrain_tag:
+        w1, b1, w2, b2 = train_mlp(mini_batch_x, mini_batch_y)
+        sio.savemat('mlp.mat', mdict={'w1': w1, 'b1': b1, 'w2': w2, 'b2': b2})
+    else:
+        data = sio.loadmat('mlp.mat')
+        w1, b1, w2, b2 = data['w1'], data['b1'], data['w2'], data['b2']
 
     acc = 0
     confusion = np.zeros((10, 10))
@@ -95,7 +110,7 @@ def main_mlp():
     visualize_confusion_matrix(confusion, accuracy, label_classes, 'Multi-layer Perceptron Confusion Matrix')
 
 
-def main_cnn():
+def main_cnn(retrain_tag):
     mnist_train = sio.loadmat('./mnist_train.mat')
     mnist_test = sio.loadmat('./mnist_test.mat')
     im_train, label_train = mnist_train['im_train'], mnist_train['label_train']
@@ -104,12 +119,13 @@ def main_cnn():
     im_train, im_test = im_train / 255.0, im_test / 255.0
     
     mini_batch_x, mini_batch_y = get_mini_batch(im_train, label_train, batch_size)
-    #w_conv, b_conv, w_fc, b_fc = train_cnn(mini_batch_x, mini_batch_y)
-    #sio.savemat('cnn.mat', mdict={'w_conv': w_conv, 'b_conv': b_conv, 'w_fc': w_fc, 'b_fc': b_fc})
-    # could use following two lines to replace above two lines if only want to check results
-    data = sio.loadmat('cnn.mat')
-    w_conv, b_conv, w_fc, b_fc = data['w_conv'], data['b_conv'], data['w_fc'], data['b_fc']
-    
+
+    if retrain_tag:
+        w_conv, b_conv, w_fc, b_fc = train_cnn(mini_batch_x, mini_batch_y)
+        sio.savemat('cnn.mat', mdict={'w_conv': w_conv, 'b_conv': b_conv, 'w_fc': w_fc, 'b_fc': b_fc})
+    else:
+        data = sio.loadmat('cnn.mat')
+        w_conv, b_conv, w_fc, b_fc = data['w_conv'], data['b_conv'], data['w_fc'], data['b_fc']
     acc = 0
     confusion = np.zeros((10, 10))
     num_test = im_test.shape[1]

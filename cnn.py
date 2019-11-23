@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import numpy.matlib
+import sys
 import os
 import os.path
 from os import path
@@ -10,6 +11,7 @@ import matplotlib.pyplot as plt
 import math
 import main_functions as main
 import random
+
 np.random.seed(2)
 
 def get_mini_batch(im_train, label_train, batch_size):
@@ -563,11 +565,14 @@ def train_cnn(mini_batch_x, mini_batch_y):
 
 
 if __name__ == '__main__':
-    
-    main.main_slp_linear()
-    main.main_slp()
-    main.main_mlp()
-    main.main_cnn()
+    retrain_tag = False
+    for arg in sys.argv[1:]:
+        if arg=="-r":
+            retrain_tag = True
+    main.main_slp_linear(retrain_tag)
+    main.main_slp(retrain_tag)
+    main.main_mlp(retrain_tag)
+    main.main_cnn(retrain_tag)
 
 
 
