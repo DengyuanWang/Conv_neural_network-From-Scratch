@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import numpy.matlib
 import os
+import os.path
+from os import path
 import time
 import scipy.io as sio
 import matplotlib.pyplot as plt
@@ -13,8 +15,8 @@ np.random.seed(2)
 def get_mini_batch(im_train, label_train, batch_size):
     # TO DO
     #im_train is 196 * sample_size
-    print(label_train.shape)
-    print(im_train.shape)
+    #print(label_train.shape)
+    #print(im_train.shape)
     idicies = np.random.permutation(im_train.shape[1])
     batch_num = int(math.ceil(im_train.shape[1]/batch_size))
     mini_batch_x = np.zeros([196,batch_size,batch_num])
@@ -30,8 +32,8 @@ def get_mini_batch(im_train, label_train, batch_size):
             mini_batch_x[:,j,i] = im_train[:,id]
             mini_batch_y[label_train[0,id],j,i] = 1
             count+=1
-    print(mini_batch_x.shape)
-    print(count)
+    #print(mini_batch_x.shape)
+    #print(count)
     return mini_batch_x, mini_batch_y
 
 
@@ -99,7 +101,7 @@ def loss_cross_entropy_softmax(x, y):
                     -y_j*e^x_i/sum
         sum([]*[]) = sum([0 0 0 0 y_i 0 0 0] - [..y_j-1 y_j y_j+1...]*e^x_i/sum)
     '''
-    cc = np.array(x, dtype=np.float128)
+    cc = np.array(x, dtype=np.float64)
     ex = np.exp(cc)
     sum_ex = np.sum(ex)
     y_tilde = ex/sum_ex
@@ -118,18 +120,32 @@ def relu(x):
     # TO DO
     # if x>0: y = x
     # if x<=0 y = 0.01 * x
-    x[x<=0] *= 0.01
+    if len(x.shape)==3:
+        x[x<=0] *= 0
+    else:
+        x[x<=0] *= 0.01
     y = x
     return y
 
 
 def relu_backward(dl_dy, x, y):
     # TO DO
-    #dl_dy(1 by n) x(n by 1)
+    #dl_dy(1 by n) or dl_dy = [1,:,:,channels]
+    #x(n by 1) or  x = [h,w,c]
     # if x>0: y = x
     # if x<=0 y = 0.01 * x
-    dy_dx = np.transpose(np.where(x > 0, 1, 0.01))
-    dl_dx = np.multiply(dl_dy,dy_dx)
+    
+    
+    if(len(dl_dy.shape)==4):#dl_dy = [1,:,:,channels]
+        h,w,c = x.shape;
+        dl_dx = np.zeros([1,h,w,c])
+        dy_dx= np.where(x > 0, 1, 0)
+        for k in range(0,dl_dy.shape[3]):#for every channel
+            dl_dx[0,:,:,k] = np.multiply(dl_dy[0,:,:,k],dy_dx[:,:,k])
+        #print(dl_dx.shape)
+    else:
+        dy_dx = np.transpose(np.where(x > 0, 1, 0.01))
+        dl_dx = np.multiply(dl_dy,dy_dx)
     return dl_dx
 
 def im2col(x,w_conv,b_conv):
@@ -158,7 +174,7 @@ def im2col(x,w_conv,b_conv):
 
 def conv(x, w_conv, b_conv):
     # TO DO
-    #Tested, Correct!
+    #Tested, Correct!!!
     #x is 14 by 14 by 1
     #w_conv is 3 by 3 by 1 by 3, aka: kernel_height by kernel_width by inchannels by out channels
     #b_conv is 3 by 1, aka output channels by 1
@@ -179,42 +195,96 @@ def conv(x, w_conv, b_conv):
 
 def conv_backward(dl_dy, x, w_conv, b_conv, y):
     # TO DO
-    #seems to be correct
+    # Tested correct!!
     # y is height by witdh by channels
     #dl_dy is 1 by height by witdh by channels
     #dl_db is 1 by channels
     #dl_db_i = dl_dy[:,:,i] * ones[height, width]*dy_db
-    #dl_dw is [1,kh,kw,ic,oc]
+    #dl_dw is [kh,kw,ic,oc]
     dl_db = np.zeros([1,b_conv.shape[0]])
     #dl_drst is [height*width,oc]
     dl_drst = np.zeros([y.shape[0]*y.shape[1],y.shape[2]])
     dl_dw = np.zeros(w_conv.shape)
     _,im_rows,_ = im2col(x, w_conv, b_conv)
     #dl_dw_cols = np.zeros(w_cols.shape)
-    for i in range(0,dl_dy.shape[-1]):
+    for i in range(0,dl_dy.shape[-1]):# for each channel
         dl_db[0,i] = np.sum(dl_dy[0,:,:,i])
         dl_drst[:,i] = dl_dy[0,:,:,i].reshape(-1)
         #dl_drst is height*width by out channel; im_rows is height*width by kkic,
-       #dl_dw_cols[:,i] = np.dot(dl_drst[:,i],im_rows)
+        #dl_dw_cols[:,i] = np.dot(dl_drst[:,i],im_rows)
         dl_dw[:,:,:,i] = np.dot(dl_drst[:,i],im_rows).reshape(dl_dw.shape[0],dl_dw.shape[1],dl_dw.shape[2])
     return dl_dw, dl_db
 
 def pool2x2(x):
     # TO DO
+
+    stride = 2
+    h,w,c = x.shape
+    ho,wo,co = int(h/2),int(w/2),c
+    #print("{} {} {}".format(ho,wo,co))
+    y = np.zeros([ho,wo,co])
+    for i in range(0,ho):
+        for j in range(0,wo):
+            for k in range(0,co):
+                p_x = stride*i
+                p_y = stride*j
+                patch = x[p_x:p_x+stride,p_y:p_y+stride,k]
+                y[i,j,k]= np.amax(patch)
     return y
 
 def pool2x2_backward(dl_dy, x, y):
     # TO DO
+    #dl_dy is [1,:,:,channel]
+    #dl_dx is [1,:,:,channel]
+    #x is [h w c]
+    stride = 2
+    h,w,c = x.shape
+    ho,wo,co = int(h/2),int(w/2),c
+    #print("{} {} {}".format(ho,wo,co))
+    dl_dx = np.zeros([1,h,w,c])
+    for i in range(0,dl_dy.shape[1]):
+        for j in range(0,dl_dy.shape[2]):
+            for k in range(0,dl_dy.shape[3]):
+                p_x = stride*i
+                p_y = stride*j
+                patch = x[p_x:p_x+stride,p_y:p_y+stride,k]
+                id = np.argmax(patch)
+                dl_dx[0,p_x+int(id/stride),p_y+id%stride,k] = dl_dy[0,i,j,k]
+
     return dl_dx
 
 
 def flattening(x):
     # TO DO
+    # x = [h,w,c]
+    h,w,c = x.shape
+    y = np.zeros([h*w*c,1])
+    y = x.reshape([h*w*c,1],order='F')
+    return y
+    count = 0
+    for k in range(0,c):
+        for i in range(0,h):
+            for j in range(0,w):
+                y[count,0] = x[i,j,k]
+                count+=1
     return y
 
 
 def flattening_backward(dl_dy, x, y):
     # TO DO
+    #dl_dy is 1 by n
+    #dl_dx is [1,:,:,c]
+    h,w,c = x.shape
+    dl_dx = np.zeros([1,h,w,c])
+    dl_dx = dl_dy.reshape([1,h,w,c],order='F')
+    return dl_dx
+    count = 0
+    for k in range(0,c):
+        for i in range(0,h):
+            for j in range(0,w):
+                dl_dx[0,i,j,k] = dl_dy[0,count]
+                count+=1
+
     return dl_dx
 
 
@@ -259,6 +329,7 @@ def train_slp_linear(mini_batch_x, mini_batch_y):
     plt.plot(np.array(L_log))
     plt.draw()
     '''
+
     return w, b
 
 def train_slp(mini_batch_x, mini_batch_y):
@@ -370,17 +441,133 @@ def train_mlp(mini_batch_x, mini_batch_y):
     return w1, b1, w2, b2
 
 
+
 def train_cnn(mini_batch_x, mini_batch_y):
     # TO DO
+    lambda_ = 0.9 # decay rate
+    lr = 0.1
+    beta1 = 0.95
+    beta2 = 0.99
+    tag = False
+    if tag==True:
+        data = sio.loadmat('cnn.mat')
+        w_conv, b_conv, w_fc, b_fc = data['w_conv'], data['b_conv'], data['w_fc'], data['b_fc']
+        
+    else:
+        
+        mu, sigma = 0, 1 # mean and standard deviation
+        w_conv = np.random.normal(mu, sigma, [3,3,1,3])
+        #w_conv = w_conv/np.max(np.absolute(w_conv))
+        b_conv = np.random.normal(mu, sigma, [3,1])
+        #b_conv = b_conv/np.max(np.absolute(b_conv))
+        w_fc = np.random.normal(mu, sigma, [10,147])
+        #w_fc = w_fc/np.max(np.absolute(w_fc))
+        b_fc = np.random.normal(mu, sigma, [10,1])
+        #b_fc = b_fc/np.max(np.absolute(b_fc))
+    
+    batch_id = 0
+    batch_size = mini_batch_x.shape[1]
+    print(mini_batch_x.shape)
+    L_log = []
+    L = 0
+    for iter in range(0,10000):
+        if (iter+1)%1000==0:
+            lr *= lambda_
+            print(lr)
+        dw_conv = np.zeros(w_conv.shape)
+        db_conv = np.zeros(b_conv.shape)
+        dw_fc = np.zeros(w_fc.shape)
+        db_fc = np.zeros(b_fc.shape)
+        
+        v_w_conv = np.zeros(w_conv.shape)
+        v_b_conv = np.zeros(b_conv.shape)
+        v_w_fc = np.zeros(w_fc.shape)
+        v_b_fc = np.zeros(b_fc.shape)
+
+        s_w_conv = np.zeros(w_conv.shape)
+        s_b_conv = np.zeros(b_conv.shape)
+        s_w_fc = np.zeros(w_fc.shape)
+        s_b_fc = np.zeros(b_fc.shape)
+
+
+        if(iter%50==0):
+            print("iter:{} mean_loss={}".format(iter,L/(50*batch_size)))
+            L = 0
+        for i in range(0,batch_size):
+            x = mini_batch_x[:,i,batch_id].reshape((14,14,1),order='F')
+            '''
+            plt.imshow(x[:,:,0],cmap='gray')
+            plt.draw()
+            plt.pause(10)
+            '''
+            y = mini_batch_y[:,i,batch_id].reshape(-1,1)
+            #cnn forward
+            y_conv = conv(x, w_conv, b_conv)#y_conv is [14,14,3]
+            y_conv_relu = relu(y_conv)#y_conv_relu is [14,14,3]
+            y_pool = pool2x2(y_conv_relu)#y_conv_relu is [7,7,3]
+            y_flatten = flattening(y_pool)#y_flatten is [147,1]
+            
+            y1_tilde = fc(y_flatten, w_fc, b_fc)#y1_tilde is [10,1]
+            #y1_relu = relu(y1_tilde)#y1_relu is [10,1]
+            y1_relu = y1_tilde
+            l, dl_dy = loss_cross_entropy_softmax(y1_relu,y)#dl_dy is [1,10]
+
+            #cnn backprop
+            #dl_dy1_tilde = relu_backward(dl_dy, y1_tilde, y1_relu)#dl_dy1_tilde is [1,10]
+            dl_dy1_tilde = dl_dy
+            dl_dy_flatten, dl_dw_fc, dl_db_fc = fc_backward(dl_dy1_tilde, y_flatten, w_fc, b_fc, y1_tilde)
+
+            dl_dy_pool = flattening_backward(dl_dy_flatten, y_pool, y_flatten)#dl_dy_pool is [1,7,7,3]
+
+            dl_dy_conv_relu = pool2x2_backward(dl_dy_pool,y_conv_relu,y_pool)#dl_dy_conv_relu is [1,14,14,3]
+            dl_dy_conv = relu_backward(dl_dy_conv_relu, y_conv, y_conv_relu)#dl_dy_conv is [1,14,14,3]
+            
+            dl_dw_conv,dl_db_conv = conv_backward(dl_dy_conv, x, w_conv, b_conv, y_conv)
+            #dl_dw_conv is [3,3,1,3]
+            #dl_db_conv is [1,3]
+            dw_conv += dl_dw_conv
+            db_conv += np.transpose(dl_db_conv)
+            dw_fc += np.transpose(dl_dw_fc)
+            db_fc += np.transpose(dl_db_fc)
+            L = L+l
+        batch_id = (batch_id+random.randint(0, mini_batch_x.shape[2]) )%mini_batch_x.shape[2]
+        
+
+        v_w_conv = beta1*v_w_conv + (1-beta1)*dw_conv/batch_size # momentum update
+        s_w_conv = beta2*s_w_conv + (1-beta2)*(dw_conv/batch_size)**2 # RMSProp update
+        w_conv -= lr * v_w_conv/np.sqrt(s_w_conv+1e-7) # combine momentum and RMSProp to perform update with Adam
+        
+        v_b_conv = beta1*v_b_conv + (1-beta1)*db_conv/batch_size
+        s_b_conv = beta2*s_b_conv + (1-beta2)*(db_conv/batch_size)**2
+        b_conv -= lr * v_b_conv/np.sqrt(s_b_conv+1e-7)
+       
+        v_w_fc = beta1*v_w_fc + (1-beta1)*dw_fc/batch_size # momentum update
+        s_w_fc = beta2*s_w_fc + (1-beta2)*(dw_fc/batch_size)**2 # RMSProp update
+        w_fc -= lr * v_w_fc/np.sqrt(s_w_fc+1e-7) # combine momentum and RMSProp to perform update with Adam
+        
+        v_b_fc = beta1*v_b_fc + (1-beta1)*db_fc/batch_size
+        s_b_fc = beta2*s_b_fc + (1-beta2)*(db_fc/batch_size)**2
+        b_fc-= lr * v_b_fc/np.sqrt(s_b_fc+1e-7)
+
+        #print(L/batch_size)
+        #L_log.append(L/batch_size)
+    print("Train Over for SLP")
+    '''
+    plt.figure(1)
+    plt.plot(np.array(L_log))
+    plt.draw()
+    plt.pause(5)
+    plt.clf
+    '''
     return w_conv, b_conv, w_fc, b_fc
 
 
 if __name__ == '__main__':
-
-    #main.main_slp_linear()
-    #main.main_slp()
-    #main.main_mlp()
-    #main.main_cnn()
+    
+    main.main_slp_linear()
+    main.main_slp()
+    main.main_mlp()
+    main.main_cnn()
 
 
 
